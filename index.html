@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UBS 06 — Acompanhamento</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Serif+Display&family=DM+Sans:wght@300;400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- ══════════════════════════════════
+         TELA DE LOGIN / CADASTRO
+    ══════════════════════════════════ -->
+    <div id="screen-login">
+      <div class="login-card">
+        <h1>🏥 UBS 06</h1>
+        <p>Acompanhamento de Hipertensos, Diabéticos e Saúde Mental</p>
+
+        <div id="login-msg" class="msg"></div>
+
+        <!-- FORM LOGIN -->
+        <div id="form-login">
+          <div class="field">
+            <label>E-mail</label>
+            <input type="email" id="login-email" placeholder="seu@email.com" />
+          </div>
+          <div class="field">
+            <label>Senha</label>
+            <input
+              type="password"
+              id="login-senha"
+              placeholder="••••••••"
+            />
+          </div>
+          <button class="btn" onclick="fazerLogin()">Entrar</button>
+          <div class="login-toggle">
+            Ainda não tem conta?
+            <a onclick="alternarForm('cadastro')">Criar conta</a>
+          </div>
+        </div>
+
+        <!-- FORM CADASTRO ACS -->
+        <div id="form-cadastro" style="display: none">
+          <div class="field">
+            <label>Seu nome</label>
+            <input
+              type="text"
+              id="cad-nome"
+              placeholder="Ex: Maria da Silva"
+            />
+          </div>
+          <div class="field">
+            <label>Setor / Microárea</label>
+            <input
+              type="text"
+              id="cad-setor"
+              placeholder="Ex: Setor A / Microárea 3"
+            />
+          </div>
+          <div class="field">
+            <label>E-mail</label>
+            <input type="email" id="cad-email" placeholder="seu@email.com" />
+          </div>
+          <div class="field">
+            <label>Senha</label>
+            <input
+              type="password"
+              id="cad-senha"
+              placeholder="Mínimo 6 caracteres"
+            />
+          </div>
+          <button class="btn" onclick="criarConta()">Criar conta</button>
+          <div class="login-toggle">
+            Já tem conta? <a onclick="alternarForm('login')">Entrar</a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════════════════════════════════
+         TELA PRINCIPAL (APP)
+    ══════════════════════════════════ -->
+    <div id="screen-app">
+      <div class="topbar">
+        <h1>🏥 UBS 06 — Dashboard</h1>
+        <div class="topbar-right">
+          <span class="user-badge" id="user-nome"></span>
+          <button class="btn-sm btn-novo" onclick="abrirModal()">
+            + Novo Paciente
+          </button>
+          <button class="btn-sm btn-exportar" onclick="exportarExcel()">
+            ⬇ Excel
+          </button>
+          <button class="btn-sm btn-sair" onclick="sair()">Sair</button>
+        </div>
+      </div>
+
+      <div class="main">
+        <!-- Alertas de receitas vencendo -->
+        <div class="alertas-wrap" id="alertas-wrap">
+          <div class="alertas-header">
+            <span>⚠️ Atenção — Receitas</span>
+          </div>
+          <div class="alertas-list" id="alertas-list"></div>
+        </div>
+
+        <!-- Resumo -->
+        <div class="summary-grid">
+          <div class="card total">
+            <div class="card-label">Total Pacientes</div>
+            <div class="card-value" id="cnt-total">—</div>
+          </div>
+          <div class="card vencida">
+            <div class="card-label">Receitas Vencidas</div>
+            <div class="card-value" id="cnt-vencida">—</div>
+          </div>
+          <div class="card breve">
+            <div class="card-label">Vencem em Breve</div>
+            <div class="card-value" id="cnt-breve">—</div>
+          </div>
+          <div class="card ok">
+            <div class="card-label">A Vencer</div>
+            <div class="card-value" id="cnt-ok">—</div>
+          </div>
+        </div>
+
+        <!-- Controles -->
+        <div class="controls">
+          <input
+            type="text"
+            class="search-box"
+            id="busca"
+            placeholder="🔍  Buscar por nome, SUS ou condição…"
+            oninput="renderTabela()"
+          />
+          <button
+            class="filter-btn active"
+            data-f="todos"
+            onclick="setFiltro(this)"
+          >
+            Todos
+          </button>
+          <button
+            class="filter-btn"
+            data-f="VENCIDA"
+            onclick="setFiltro(this)"
+          >
+            Vencida
+          </button>
+          <button
+            class="filter-btn"
+            data-f="EM BREVE"
+            onclick="setFiltro(this)"
+          >
+            Em Breve
+          </button>
+          <button
+            class="filter-btn"
+            data-f="A VENCER"
+            onclick="setFiltro(this)"
+          >
+            A Vencer
+          </button>
+        </div>
+
+        <!-- Tabela -->
+        <div class="table-wrap">
+          <div class="loading" id="loading">Carregando pacientes…</div>
+          <table id="tabela" style="display: none">
+            <thead>
+              <tr>
+                <th>Paciente</th>
+                <th>Condição</th>
+                <th>Receita</th>
+                <th>Próx. Troca</th>
+                <th>Controlada</th>
+                <th>Próx. Troca</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="tbody"></tbody>
+          </table>
+          <div class="empty" id="empty" style="display: none">
+            Nenhum paciente encontrado.
+          </div>
+        </div>
+      </div>
+
+      <footer>Feito por Deborah Aline Dangui · UBS 06 · Ariquemes – RO</footer>
+    </div>
+
+    <!-- ══════════════════════════════════
+         MODAL CADASTRO / EDIÇÃO
+    ══════════════════════════════════ -->
+    <div class="overlay" id="overlay">
+      <div class="modal">
+        <h2 id="modal-titulo">Novo Paciente</h2>
+        <input type="hidden" id="pac-id" />
+
+        <div class="form-grid">
+          <div class="field full">
+            <label>Nome completo *</label>
+            <input
+              type="text"
+              id="pac-nome"
+              placeholder="Nome do paciente"
+            />
+          </div>
+          <div class="field">
+            <label>Nº SUS</label>
+            <input
+              type="text"
+              id="pac-sus"
+              placeholder="15 dígitos"
+              maxlength="15"
+            />
+          </div>
+          <div class="field">
+            <label>Data de nascimento</label>
+            <input type="date" id="pac-nasc" />
+          </div>
+          <div class="field full">
+            <label>Endereço</label>
+            <input
+              type="text"
+              id="pac-end"
+              placeholder="Rua, número, setor"
+            />
+          </div>
+          <div class="field full">
+            <label>Condição *</label>
+            <select id="pac-cond">
+              <option value="">Selecione…</option>
+              <option>HIPERTENSA (O)</option>
+              <option>DIABÉTICA (O)</option>
+              <option>HIPERTENSA (O)/DIABÉTICA (O)</option>
+              <option>SAÚDE MENTAL</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Receita — data</label>
+            <input type="date" id="pac-rec-data" />
+          </div>
+          <div class="field">
+            <label>Próx. troca receita</label>
+            <input type="date" id="pac-rec-prox" />
+          </div>
+          <div class="field full">
+            <label>Status receita</label>
+            <select id="pac-rec-status">
+              <option value="">—</option>
+              <option>A VENCER</option>
+              <option>EM BREVE</option>
+              <option>VENCIDA</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>Controlada — data</label>
+            <input type="date" id="pac-ctrl-data" />
+          </div>
+          <div class="field">
+            <label>Próx. troca controlada</label>
+            <input type="date" id="pac-ctrl-prox" />
+          </div>
+          <div class="field full">
+            <label>Status controlada</label>
+            <select id="pac-ctrl-status">
+              <option value="">—</option>
+              <option>A VENCER</option>
+              <option>EM BREVE</option>
+              <option>VENCIDA</option>
+            </select>
+          </div>
+        </div>
+
+        <div id="modal-msg" class="msg"></div>
+
+        <div class="modal-btns">
+          <button class="btn-cancel" onclick="fecharModal()">Cancelar</button>
+          <button class="btn-save" id="btn-salvar" onclick="salvarPaciente()">
+            Salvar
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <script src="app.js"></script>
+  </body>
+</html>
