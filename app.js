@@ -4,7 +4,9 @@ const SUPA_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFremFka3BjdWdsdmx3YWpxYnp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MDY5NzYsImV4cCI6MjA5NjE4Mjk3Nn0.2QL-0ZYQ6Zm4VCG7S27aBsSshzO2B0GMQ4ZnxdAmV3A";
 
 const { createClient } = supabase;
-const sb = createClient(SUPA_URL, SUPA_KEY);
+const sb = createClient(SUPA_URL, SUPA_KEY, {
+  db: { schema: "app" }, // ✅ MUDANÇA 1: aponta para schema app
+});
 
 let PACIENTES = [];
 let filtroAtivo = "todos";
@@ -80,7 +82,7 @@ async function entrarNoApp(user) {
   document.getElementById("screen-app").style.display = "block";
 
   const { data: prof } = await sb
-    .from("profiles")
+    .from("profiles") // ✅ já usa schema app via createClient
     .select("nome,setor")
     .eq("id", user.id)
     .single();
@@ -91,10 +93,10 @@ async function entrarNoApp(user) {
 
   await carregarPacientes();
 
-  sb.channel("pacientes")
+  sb.channel("pacientes-realtime")
     .on(
       "postgres_changes",
-      { event: "*", schema: "public", table: "pacientes" },
+      { event: "*", schema: "app", table: "pacientes" }, // ✅ MUDANÇA 2: schema app no realtime
       () => carregarPacientes()
     )
     .subscribe();
@@ -109,7 +111,7 @@ async function sair() {
 
 async function carregarPacientes() {
   const { data, error } = await sb
-    .from("pacientes")
+    .from("pacientes") // ✅ já usa schema app via createClient
     .select("*")
     .order("nome");
 
