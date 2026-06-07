@@ -4,9 +4,12 @@ const SUPA_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFremFka3BjdWdsdmx3YWpxYnp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MDY5NzYsImV4cCI6MjA5NjE4Mjk3Nn0.2QL-0ZYQ6Zm4VCG7S27aBsSshzO2B0GMQ4ZnxdAmV3A";
 
 const { createClient } = supabase;
-const sb = createClient(SUPA_URL, SUPA_KEY, {
-  db: { schema: "app" }, // ✅ MUDANÇA 1: aponta para schema app
-});
+const sb = createClient(SUPA_URL, SUPA_KEY); // ✅ sem schema no createClient
+
+const db = {
+  profiles: () => sb.schema("app").from("profiles"),
+  pacientes: () => sb.schema("app").from("pacientes"),
+};
 
 let PACIENTES = [];
 let filtroAtivo = "todos";
@@ -47,11 +50,7 @@ async function criarConta() {
     return;
   }
   if (senha.length < 6) {
-    mostrarMsg(
-      "login-msg",
-      "A senha precisa ter pelo menos 6 caracteres.",
-      "error"
-    );
+    mostrarMsg("login-msg", "A senha precisa ter pelo menos 6 caracteres.", "error");
     return;
   }
 
@@ -69,11 +68,7 @@ async function criarConta() {
   if (data.session) {
     entrarNoApp(data.user);
   } else {
-    mostrarMsg(
-      "login-msg",
-      "Conta criada! Verifique seu e-mail para confirmar.",
-      "success"
-    );
+    mostrarMsg("login-msg", "Conta criada! Verifique seu e-mail para confirmar.", "success");
   }
 }
 
@@ -81,8 +76,7 @@ async function entrarNoApp(user) {
   document.getElementById("screen-login").style.display = "none";
   document.getElementById("screen-app").style.display = "block";
 
-  const { data: prof } = await sb
-    .from("profiles") // ✅ já usa schema app via createClient
+  const { data: prof } = await db.profiles()
     .select("nome,setor")
     .eq("id", user.id)
     .single();
@@ -96,7 +90,7 @@ async function entrarNoApp(user) {
   sb.channel("pacientes-realtime")
     .on(
       "postgres_changes",
-      { event: "*", schema: "app", table: "pacientes" }, // ✅ MUDANÇA 2: schema app no realtime
+      { event: "*", schema: "app", table: "pacientes" },
       () => carregarPacientes()
     )
     .subscribe();
@@ -110,8 +104,7 @@ async function sair() {
 // ── DADOS ─────────────────────────────────────
 
 async function carregarPacientes() {
-  const { data, error } = await sb
-    .from("pacientes") // ✅ já usa schema app via createClient
+  const { data, error } = await db.pacientes()
     .select("*")
     .order("nome");
 
@@ -158,11 +151,7 @@ function condLabel(c) {
 function badgeStatus(s) {
   if (!s) return '<span class="badge badge-none">—</span>';
   const cls =
-    s === "VENCIDA"
-      ? "badge-vencida"
-      : s === "EM BREVE"
-      ? "badge-breve"
-      : "badge-ok";
+    s === "VENCIDA" ? "badge-vencida" : s === "EM BREVE" ? "badge-breve" : "badge-ok";
   return '<span class="badge ' + cls + '">' + s + "</span>";
 }
 
@@ -179,10 +168,8 @@ function mostrarMsg(elId, texto, tipo) {
 }
 
 function alternarForm(modo) {
-  document.getElementById("form-login").style.display =
-    modo === "login" ? "" : "none";
-  document.getElementById("form-cadastro").style.display =
-    modo === "cadastro" ? "" : "none";
+  document.getElementById("form-login").style.display = modo === "login" ? "" : "none";
+  document.getElementById("form-cadastro").style.display = modo === "cadastro" ? "" : "none";
   mostrarMsg("login-msg", "", "");
 }
 
@@ -210,12 +197,8 @@ function criarAlertaItem(p) {
   const vencida = recVenc || ctlVenc;
 
   const tipo = [];
-  if (recVenc || recBreve) {
-    tipo.push("Receita" + (recVenc ? " vencida" : " vence em breve"));
-  }
-  if (ctlVenc || ctlBreve) {
-    tipo.push("Controlada" + (ctlVenc ? " vencida" : " vence em breve"));
-  }
+  if (recVenc || recBreve) tipo.push("Receita" + (recVenc ? " vencida" : " vence em breve"));
+  if (ctlVenc || ctlBreve) tipo.push("Controlada" + (ctlVenc ? " vencida" : " vence em breve"));
 
   const proxData = recVenc || recBreve ? p.receita_prox : p.ctrl_prox;
   const proxTexto = proxData ? " · Próx: " + fmtData(proxData) : "";
@@ -239,9 +222,7 @@ function criarAlertaItem(p) {
   const btn = document.createElement("button");
   btn.className = "action-btn";
   btn.textContent = "Atualizar";
-  btn.addEventListener("click", function () {
-    editarPaciente(p.id);
-  });
+  btn.addEventListener("click", function () { editarPaciente(p.id); });
 
   texto.appendChild(nome);
   texto.appendChild(detalhe);
@@ -260,9 +241,7 @@ function renderAlertas() {
       p.receita_status === "EM BREVE" ||
       p.ctrl_status === "EM BREVE"
   ).sort(function (a, b) {
-    const peso = function (s) {
-      return s === "VENCIDA" ? 0 : s === "EM BREVE" ? 1 : 2;
-    };
+    const peso = (s) => s === "VENCIDA" ? 0 : s === "EM BREVE" ? 1 : 2;
     return (
       Math.min(peso(a.receita_status), peso(a.ctrl_status)) -
       Math.min(peso(b.receita_status), peso(b.ctrl_status))
@@ -279,9 +258,7 @@ function renderAlertas() {
 
   wrap.classList.add("visible");
   list.innerHTML = "";
-  urgentes.forEach(function (p) {
-    list.appendChild(criarAlertaItem(p));
-  });
+  urgentes.forEach((p) => list.appendChild(criarAlertaItem(p)));
 }
 
 function criarLinhaTabela(p) {
@@ -322,16 +299,12 @@ function criarLinhaTabela(p) {
   const btnEditar = document.createElement("button");
   btnEditar.className = "action-btn";
   btnEditar.textContent = "Editar";
-  btnEditar.addEventListener("click", function () {
-    editarPaciente(p.id);
-  });
+  btnEditar.addEventListener("click", function () { editarPaciente(p.id); });
 
   const btnExcluir = document.createElement("button");
   btnExcluir.className = "action-btn del";
   btnExcluir.textContent = "Excluir";
-  btnExcluir.addEventListener("click", function () {
-    excluirPaciente(p.id);
-  });
+  btnExcluir.addEventListener("click", function () { excluirPaciente(p.id); });
 
   tdAcoes.appendChild(btnEditar);
   tdAcoes.appendChild(btnExcluir);
@@ -356,8 +329,7 @@ function renderTabela() {
       (p.nome || "").toLowerCase().includes(busca) ||
       (p.sus || "").includes(busca) ||
       (p.condicao || "").toLowerCase().includes(busca);
-    const matchFiltro =
-      filtroAtivo === "todos" || statusGeral(p) === filtroAtivo;
+    const matchFiltro = filtroAtivo === "todos" || statusGeral(p) === filtroAtivo;
     return matchBusca && matchFiltro;
   });
 
@@ -372,15 +344,11 @@ function renderTabela() {
   }
 
   empty.style.display = "none";
-  lista.forEach(function (p) {
-    tbody.appendChild(criarLinhaTabela(p));
-  });
+  lista.forEach((p) => tbody.appendChild(criarLinhaTabela(p)));
 }
 
 function setFiltro(btn) {
-  document.querySelectorAll(".filter-btn").forEach(function (b) {
-    b.classList.remove("active");
-  });
+  document.querySelectorAll(".filter-btn").forEach((b) => b.classList.remove("active"));
   btn.classList.add("active");
   filtroAtivo = btn.dataset.f;
   renderTabela();
@@ -394,26 +362,22 @@ function exportarExcel() {
     return;
   }
 
-  const dados = PACIENTES.map(function (p) {
-    return {
-      Nome: p.nome || "",
-      "Nº SUS": p.sus || "",
-      "Data Nasc.": fmtData(p.data_nasc),
-      Endereço: p.endereco || "",
-      Condição: p.condicao || "",
-      "Receita — Data": fmtData(p.receita_data),
-      "Receita — Próx.": fmtData(p.receita_prox),
-      "Receita — Status": p.receita_status || "",
-      "Controlada — Data": fmtData(p.ctrl_data),
-      "Controlada — Próx.": fmtData(p.ctrl_prox),
-      "Controlada — Status": p.ctrl_status || "",
-    };
-  });
+  const dados = PACIENTES.map((p) => ({
+    Nome: p.nome || "",
+    "Nº SUS": p.sus || "",
+    "Data Nasc.": fmtData(p.data_nasc),
+    Endereço: p.endereco || "",
+    Condição: p.condicao || "",
+    "Receita — Data": fmtData(p.receita_data),
+    "Receita — Próx.": fmtData(p.receita_prox),
+    "Receita — Status": p.receita_status || "",
+    "Controlada — Data": fmtData(p.ctrl_data),
+    "Controlada — Próx.": fmtData(p.ctrl_prox),
+    "Controlada — Status": p.ctrl_status || "",
+  }));
 
   const ws = XLSX.utils.json_to_sheet(dados);
-  ws["!cols"] = [20, 18, 12, 30, 28, 16, 16, 14, 16, 16, 16].map(function (w) {
-    return { wch: w };
-  });
+  ws["!cols"] = [20, 18, 12, 30, 28, 16, 16, 14, 16, 16, 16].map((w) => ({ wch: w }));
 
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Pacientes");
@@ -426,9 +390,7 @@ function exportarExcel() {
 
 function abrirModal(id) {
   limparModal();
-  document.getElementById("modal-titulo").textContent = id
-    ? "Editar Paciente"
-    : "Novo Paciente";
+  document.getElementById("modal-titulo").textContent = id ? "Editar Paciente" : "Novo Paciente";
   document.getElementById("overlay").classList.add("open");
 }
 
@@ -437,31 +399,18 @@ function fecharModal() {
 }
 
 function limparModal() {
-  [
-    "pac-id",
-    "pac-nome",
-    "pac-sus",
-    "pac-nasc",
-    "pac-end",
-    "pac-rec-data",
-    "pac-rec-prox",
-    "pac-ctrl-data",
-    "pac-ctrl-prox",
-  ].forEach(function (id) {
+  ["pac-id", "pac-nome", "pac-sus", "pac-nasc", "pac-end",
+   "pac-rec-data", "pac-rec-prox", "pac-ctrl-data", "pac-ctrl-prox"].forEach((id) => {
     document.getElementById(id).value = "";
   });
-
-  ["pac-cond", "pac-rec-status", "pac-ctrl-status"].forEach(function (id) {
+  ["pac-cond", "pac-rec-status", "pac-ctrl-status"].forEach((id) => {
     document.getElementById(id).value = "";
   });
-
   mostrarMsg("modal-msg", "", "");
 }
 
 function editarPaciente(id) {
-  const p = PACIENTES.find(function (x) {
-    return x.id === id;
-  });
+  const p = PACIENTES.find((x) => x.id === id);
   if (!p) return;
 
   abrirModal(id);
@@ -493,7 +442,7 @@ async function salvarPaciente() {
   btn.textContent = "Salvando…";
 
   const payload = {
-    nome: nome,
+    nome,
     sus: document.getElementById("pac-sus").value.trim() || null,
     data_nasc: document.getElementById("pac-nasc").value || null,
     endereco: document.getElementById("pac-end").value.trim() || null,
@@ -510,13 +459,11 @@ async function salvarPaciente() {
   let error;
 
   if (pacId) {
-    ({ error } = await sb.from("pacientes").update(payload).eq("id", pacId));
+    ({ error } = await db.pacientes().update(payload).eq("id", pacId));
   } else {
-    const {
-      data: { user },
-    } = await sb.auth.getUser();
+    const { data: { user } } = await sb.auth.getUser();
     payload.acs_id = user.id;
-    ({ error } = await sb.from("pacientes").insert(payload));
+    ({ error } = await db.pacientes().insert(payload));
   }
 
   btn.disabled = false;
@@ -532,9 +479,8 @@ async function salvarPaciente() {
 }
 
 async function excluirPaciente(id) {
-  if (!confirm("Excluir este paciente? Esta ação não pode ser desfeita."))
-    return;
-  await sb.from("pacientes").delete().eq("id", id);
+  if (!confirm("Excluir este paciente? Esta ação não pode ser desfeita.")) return;
+  await db.pacientes().delete().eq("id", id);
   await carregarPacientes();
 }
 
