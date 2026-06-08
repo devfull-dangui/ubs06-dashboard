@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="pt-BR">
   <head>
     <meta charset="UTF-8" />
@@ -29,11 +29,7 @@
           </div>
           <div class="field">
             <label>Senha</label>
-            <input
-              type="password"
-              id="login-senha"
-              placeholder="••••••••"
-            />
+            <input type="password" id="login-senha" placeholder="••••••••" />
           </div>
           <button class="btn" onclick="fazerLogin()">Entrar</button>
           <div class="login-toggle">
@@ -46,11 +42,7 @@
         <div id="form-cadastro" style="display: none">
           <div class="field">
             <label>Seu nome</label>
-            <input
-              type="text"
-              id="cad-nome"
-              placeholder="Ex: Maria da Silva"
-            />
+            <input type="text" id="cad-nome" placeholder="Ex: Maria da Silva" />
           </div>
           <div class="field">
             <label>Setor / Microárea</label>
@@ -143,11 +135,7 @@
           >
             Todos
           </button>
-          <button
-            class="filter-btn"
-            data-f="VENCIDA"
-            onclick="setFiltro(this)"
-          >
+          <button class="filter-btn" data-f="VENCIDA" onclick="setFiltro(this)">
             Vencida
           </button>
           <button
@@ -200,14 +188,12 @@
         <h2 id="modal-titulo">Novo Paciente</h2>
         <input type="hidden" id="pac-id" />
 
+        <!-- Substitua o bloco do form-grid no modal pelo abaixo -->
+
         <div class="form-grid">
           <div class="field full">
             <label>Nome completo *</label>
-            <input
-              type="text"
-              id="pac-nome"
-              placeholder="Nome do paciente"
-            />
+            <input type="text" id="pac-nome" placeholder="Nome do paciente" />
           </div>
           <div class="field">
             <label>Nº SUS</label>
@@ -224,55 +210,79 @@
           </div>
           <div class="field full">
             <label>Endereço</label>
-            <input
-              type="text"
-              id="pac-end"
-              placeholder="Rua, número, setor"
-            />
+            <input type="text" id="pac-end" placeholder="Rua, número, setor" />
           </div>
-          <div class="field full">
-            <label>Condição *</label>
+
+          <!-- CONDIÇÃO -->
+          <div class="field">
+            <label>Condição principal *</label>
             <select id="pac-cond">
               <option value="">Selecione…</option>
               <option>HIPERTENSA (O)</option>
               <option>DIABÉTICA (O)</option>
               <option>HIPERTENSA (O)/DIABÉTICA (O)</option>
-              <option>SAÚDE MENTAL</option>
             </select>
           </div>
+          <div
+            class="field"
+            style="display: flex; align-items: flex-end; padding-bottom: 0.3rem"
+          >
+            <label class="checkbox-label">
+              <input type="checkbox" id="pac-saude-mental" />
+              <span>Saúde Mental</span>
+            </label>
+          </div>
+
+          <!-- RECEITA -->
           <div class="field">
             <label>Receita — data</label>
             <input type="date" id="pac-rec-data" />
           </div>
           <div class="field">
             <label>Próx. troca receita</label>
-            <input type="date" id="pac-rec-prox" />
+            <input
+              type="text"
+              id="pac-rec-prox"
+              class="status-display"
+              readonly
+              placeholder="Calculado automaticamente"
+            />
           </div>
           <div class="field full">
             <label>Status receita</label>
-            <select id="pac-rec-status">
-              <option value="">—</option>
-              <option>A VENCER</option>
-              <option>EM BREVE</option>
-              <option>VENCIDA</option>
-            </select>
+            <input
+              type="text"
+              id="pac-rec-status"
+              class="status-display"
+              readonly
+              placeholder="Calculado automaticamente"
+            />
           </div>
+
+          <!-- CONTROLADA -->
           <div class="field">
             <label>Controlada — data</label>
             <input type="date" id="pac-ctrl-data" />
           </div>
           <div class="field">
             <label>Próx. troca controlada</label>
-            <input type="date" id="pac-ctrl-prox" />
+            <input
+              type="text"
+              id="pac-ctrl-prox"
+              class="status-display"
+              readonly
+              placeholder="Calculado automaticamente"
+            />
           </div>
           <div class="field full">
             <label>Status controlada</label>
-            <select id="pac-ctrl-status">
-              <option value="">—</option>
-              <option>A VENCER</option>
-              <option>EM BREVE</option>
-              <option>VENCIDA</option>
-            </select>
+            <input
+              type="text"
+              id="pac-ctrl-status"
+              class="status-display"
+              readonly
+              placeholder="Calculado automaticamente"
+            />
           </div>
         </div>
 

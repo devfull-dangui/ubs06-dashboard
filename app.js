@@ -4,7 +4,7 @@ const SUPA_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFremFka3BjdWdsdmx3YWpxYnp1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA2MDY5NzYsImV4cCI6MjA5NjE4Mjk3Nn0.2QL-0ZYQ6Zm4VCG7S27aBsSshzO2B0GMQ4ZnxdAmV3A";
 
 const { createClient } = supabase;
-const sb = createClient(SUPA_URL, SUPA_KEY); // ✅ sem schema no createClient
+const sb = createClient(SUPA_URL, SUPA_KEY);
 
 const db = {
   profiles: () => sb.schema("app").from("profiles"),
@@ -15,12 +15,72 @@ let PACIENTES = [];
 let filtroAtivo = "todos";
 let userNome = "";
 
+// ── CÁLCULOS AUTOMÁTICOS ──────────────────────
+
+function calcProxData(dataStr, meses) {
+  if (!dataStr) return "";
+  const d = new Date(dataStr + "T00:00:00");
+  d.setMonth(d.getMonth() + meses);
+  return d.toISOString().split("T")[0];
+}
+
+function calcStatus(proxStr) {
+  if (!proxStr) return "";
+  const hoje = new Date();
+  hoje.setHours(0, 0, 0, 0);
+  const prox = new Date(proxStr + "T00:00:00");
+  const diffDias = Math.ceil((prox - hoje) / (1000 * 60 * 60 * 24));
+  if (diffDias < 0) return "VENCIDA";
+  if (diffDias <= 30) return "EM BREVE";
+  return "A VENCER";
+}
+
+function atualizarCamposReceita() {
+  const data = document.getElementById("pac-rec-data").value;
+  const prox = calcProxData(data, 6);
+  const status = calcStatus(prox);
+  document.getElementById("pac-rec-prox").value = prox ? fmtData(prox) : "";
+  document.getElementById("pac-rec-status").value = status;
+  atualizarCorStatus("pac-rec-status", status);
+}
+
+function atualizarCamposControlada() {
+  const data = document.getElementById("pac-ctrl-data").value;
+  const prox = calcProxData(data, 2);
+  const status = calcStatus(prox);
+  document.getElementById("pac-ctrl-prox").value = prox ? fmtData(prox) : "";
+  document.getElementById("pac-ctrl-status").value = status;
+  atualizarCorStatus("pac-ctrl-status", status);
+}
+
+function atualizarCorStatus(elId, status) {
+  const el = document.getElementById(elId);
+  el.className = "status-display " +
+    (status === "VENCIDA" ? "status-vencida" :
+     status === "EM BREVE" ? "status-breve" :
+     status === "A VENCER" ? "status-ok" : "");
+}
+
+// ── CONDIÇÃO ─────────────────────────────────
+
+function montarCondicao() {
+  const cond = document.getElementById("pac-cond").value;
+  const sm = document.getElementById("pac-saude-mental").checked;
+  if (!cond) return "";
+  return sm ? cond + " + SAÚDE MENTAL" : cond;
+}
+
+function separarCondicao(valor) {
+  if (!valor) return { cond: "", sm: false };
+  const sm = valor.includes("+ SAÚDE MENTAL");
+  const cond = valor.replace(" + SAÚDE MENTAL", "").trim();
+  return { cond, sm };
+}
+
 // ── AUTH ──────────────────────────────────────
 
 async function init() {
-  const {
-    data: { session },
-  } = await sb.auth.getSession();
+  const { data: { session } } = await sb.auth.getSession();
   if (session) entrarNoApp(session.user);
 }
 
@@ -28,14 +88,8 @@ async function fazerLogin() {
   const email = document.getElementById("login-email").value.trim();
   const senha = document.getElementById("login-senha").value;
   mostrarMsg("login-msg", "", "");
-  const { data, error } = await sb.auth.signInWithPassword({
-    email,
-    password: senha,
-  });
-  if (error) {
-    mostrarMsg("login-msg", "E-mail ou senha incorretos.", "error");
-    return;
-  }
+  const { data, error } = await sb.auth.signInWithPassword({ email, password: senha });
+  if (error) { mostrarMsg("login-msg", "E-mail ou senha incorretos.", "error"); return; }
   entrarNoApp(data.user);
 }
 
@@ -55,15 +109,11 @@ async function criarConta() {
   }
 
   const { data, error } = await sb.auth.signUp({
-    email,
-    password: senha,
+    email, password: senha,
     options: { data: { nome, setor } },
   });
 
-  if (error) {
-    mostrarMsg("login-msg", error.message, "error");
-    return;
-  }
+  if (error) { mostrarMsg("login-msg", error.message, "error"); return; }
 
   if (data.session) {
     entrarNoApp(data.user);
@@ -77,9 +127,7 @@ async function entrarNoApp(user) {
   document.getElementById("screen-app").style.display = "block";
 
   const { data: prof } = await db.profiles()
-    .select("nome,setor")
-    .eq("id", user.id)
-    .single();
+    .select("nome,setor").eq("id", user.id).single();
 
   userNome = prof?.nome || user.email;
   document.getElementById("user-nome").textContent =
@@ -88,11 +136,8 @@ async function entrarNoApp(user) {
   await carregarPacientes();
 
   sb.channel("pacientes-realtime")
-    .on(
-      "postgres_changes",
-      { event: "*", schema: "app", table: "pacientes" },
-      () => carregarPacientes()
-    )
+    .on("postgres_changes", { event: "*", schema: "app", table: "pacientes" },
+      () => carregarPacientes())
     .subscribe();
 }
 
@@ -104,15 +149,8 @@ async function sair() {
 // ── DADOS ─────────────────────────────────────
 
 async function carregarPacientes() {
-  const { data, error } = await db.pacientes()
-    .select("*")
-    .order("nome");
-
-  if (error) {
-    console.error(error);
-    return;
-  }
-
+  const { data, error } = await db.pacientes().select("*").order("nome");
+  if (error) { console.error(error); return; }
   PACIENTES = data || [];
   renderSummary();
   renderTabela();
@@ -132,10 +170,11 @@ function statusGeral(p) {
 
 function condClass(c) {
   if (!c) return "";
+  if (c.includes("SAÚDE MENTAL") && c.length > 13) return "cond-HD"; // combinada
   if (c.includes("/")) return "cond-HD";
   if (c.includes("HIPERT")) return "cond-H";
   if (c.includes("DIAB")) return "cond-D";
-  if (c.includes("SA")) return "cond-S";
+  if (c.includes("SAÚDE")) return "cond-S";
   return "";
 }
 
@@ -145,13 +184,12 @@ function condLabel(c) {
     .replace("HIPERTENSA (O)/DIABÉTICA (O)", "Hipert. + Diab.")
     .replace("HIPERTENSA (O)", "Hipertensa(o)")
     .replace("DIABÉTICA (O)", "Diabética(o)")
-    .replace("SAÚDE MENTAL", "Saúde Mental");
+    .replace("SAÚDE MENTAL", "S. Mental");
 }
 
 function badgeStatus(s) {
   if (!s) return '<span class="badge badge-none">—</span>';
-  const cls =
-    s === "VENCIDA" ? "badge-vencida" : s === "EM BREVE" ? "badge-breve" : "badge-ok";
+  const cls = s === "VENCIDA" ? "badge-vencida" : s === "EM BREVE" ? "badge-breve" : "badge-ok";
   return '<span class="badge ' + cls + '">' + s + "</span>";
 }
 
@@ -176,16 +214,10 @@ function alternarForm(modo) {
 // ── RENDER ────────────────────────────────────
 
 function renderSummary() {
-  const total = PACIENTES.length;
-  const venc = PACIENTES.filter((p) => statusGeral(p) === "VENCIDA").length;
-  const brev = PACIENTES.filter((p) => statusGeral(p) === "EM BREVE").length;
-  const ok = PACIENTES.filter((p) => statusGeral(p) === "A VENCER").length;
-
-  document.getElementById("cnt-total").textContent = total;
-  document.getElementById("cnt-vencida").textContent = venc;
-  document.getElementById("cnt-breve").textContent = brev;
-  document.getElementById("cnt-ok").textContent = ok;
-
+  document.getElementById("cnt-total").textContent = PACIENTES.length;
+  document.getElementById("cnt-vencida").textContent = PACIENTES.filter(p => statusGeral(p) === "VENCIDA").length;
+  document.getElementById("cnt-breve").textContent = PACIENTES.filter(p => statusGeral(p) === "EM BREVE").length;
+  document.getElementById("cnt-ok").textContent = PACIENTES.filter(p => statusGeral(p) === "A VENCER").length;
   renderAlertas();
 }
 
@@ -222,43 +254,33 @@ function criarAlertaItem(p) {
   const btn = document.createElement("button");
   btn.className = "action-btn";
   btn.textContent = "Atualizar";
-  btn.addEventListener("click", function () { editarPaciente(p.id); });
+  btn.addEventListener("click", () => editarPaciente(p.id));
 
   texto.appendChild(nome);
   texto.appendChild(detalhe);
   div.appendChild(icone);
   div.appendChild(texto);
   div.appendChild(btn);
-
   return div;
 }
 
 function renderAlertas() {
-  const urgentes = PACIENTES.filter(
-    (p) =>
-      p.receita_status === "VENCIDA" ||
-      p.ctrl_status === "VENCIDA" ||
-      p.receita_status === "EM BREVE" ||
-      p.ctrl_status === "EM BREVE"
-  ).sort(function (a, b) {
-    const peso = (s) => s === "VENCIDA" ? 0 : s === "EM BREVE" ? 1 : 2;
-    return (
-      Math.min(peso(a.receita_status), peso(a.ctrl_status)) -
-      Math.min(peso(b.receita_status), peso(b.ctrl_status))
-    );
+  const urgentes = PACIENTES.filter(p =>
+    p.receita_status === "VENCIDA" || p.ctrl_status === "VENCIDA" ||
+    p.receita_status === "EM BREVE" || p.ctrl_status === "EM BREVE"
+  ).sort((a, b) => {
+    const peso = s => s === "VENCIDA" ? 0 : s === "EM BREVE" ? 1 : 2;
+    return Math.min(peso(a.receita_status), peso(a.ctrl_status)) -
+           Math.min(peso(b.receita_status), peso(b.ctrl_status));
   });
 
   const wrap = document.getElementById("alertas-wrap");
   const list = document.getElementById("alertas-list");
 
-  if (urgentes.length === 0) {
-    wrap.classList.remove("visible");
-    return;
-  }
-
+  if (urgentes.length === 0) { wrap.classList.remove("visible"); return; }
   wrap.classList.add("visible");
   list.innerHTML = "";
-  urgentes.forEach((p) => list.appendChild(criarAlertaItem(p)));
+  urgentes.forEach(p => list.appendChild(criarAlertaItem(p)));
 }
 
 function criarLinhaTabela(p) {
@@ -299,12 +321,12 @@ function criarLinhaTabela(p) {
   const btnEditar = document.createElement("button");
   btnEditar.className = "action-btn";
   btnEditar.textContent = "Editar";
-  btnEditar.addEventListener("click", function () { editarPaciente(p.id); });
+  btnEditar.addEventListener("click", () => editarPaciente(p.id));
 
   const btnExcluir = document.createElement("button");
   btnExcluir.className = "action-btn del";
   btnExcluir.textContent = "Excluir";
-  btnExcluir.addEventListener("click", function () { excluirPaciente(p.id); });
+  btnExcluir.addEventListener("click", () => excluirPaciente(p.id));
 
   tdAcoes.appendChild(btnEditar);
   tdAcoes.appendChild(btnExcluir);
@@ -316,16 +338,14 @@ function criarLinhaTabela(p) {
   tr.appendChild(tdCtlStatus);
   tr.appendChild(tdCtlProx);
   tr.appendChild(tdAcoes);
-
   return tr;
 }
 
 function renderTabela() {
   const busca = document.getElementById("busca").value.toLowerCase().trim();
 
-  const lista = PACIENTES.filter(function (p) {
-    const matchBusca =
-      !busca ||
+  const lista = PACIENTES.filter(p => {
+    const matchBusca = !busca ||
       (p.nome || "").toLowerCase().includes(busca) ||
       (p.sus || "").includes(busca) ||
       (p.condicao || "").toLowerCase().includes(busca);
@@ -335,20 +355,15 @@ function renderTabela() {
 
   const tbody = document.getElementById("tbody");
   const empty = document.getElementById("empty");
-
   tbody.innerHTML = "";
 
-  if (lista.length === 0) {
-    empty.style.display = "block";
-    return;
-  }
-
+  if (lista.length === 0) { empty.style.display = "block"; return; }
   empty.style.display = "none";
-  lista.forEach((p) => tbody.appendChild(criarLinhaTabela(p)));
+  lista.forEach(p => tbody.appendChild(criarLinhaTabela(p)));
 }
 
 function setFiltro(btn) {
-  document.querySelectorAll(".filter-btn").forEach((b) => b.classList.remove("active"));
+  document.querySelectorAll(".filter-btn").forEach(b => b.classList.remove("active"));
   btn.classList.add("active");
   filtroAtivo = btn.dataset.f;
   renderTabela();
@@ -357,12 +372,9 @@ function setFiltro(btn) {
 // ── EXPORTAR EXCEL ────────────────────────────
 
 function exportarExcel() {
-  if (PACIENTES.length === 0) {
-    alert("Nenhum paciente para exportar.");
-    return;
-  }
+  if (PACIENTES.length === 0) { alert("Nenhum paciente para exportar."); return; }
 
-  const dados = PACIENTES.map((p) => ({
+  const dados = PACIENTES.map(p => ({
     Nome: p.nome || "",
     "Nº SUS": p.sus || "",
     "Data Nasc.": fmtData(p.data_nasc),
@@ -377,11 +389,9 @@ function exportarExcel() {
   }));
 
   const ws = XLSX.utils.json_to_sheet(dados);
-  ws["!cols"] = [20, 18, 12, 30, 28, 16, 16, 14, 16, 16, 16].map((w) => ({ wch: w }));
-
+  ws["!cols"] = [20, 18, 12, 30, 28, 16, 16, 14, 16, 16, 16].map(w => ({ wch: w }));
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Pacientes");
-
   const hoje = new Date().toLocaleDateString("pt-BR").replace(/\//g, "-");
   XLSX.writeFile(wb, "UBS06_Pacientes_" + hoje + ".xlsx");
 }
@@ -400,17 +410,21 @@ function fecharModal() {
 
 function limparModal() {
   ["pac-id", "pac-nome", "pac-sus", "pac-nasc", "pac-end",
-   "pac-rec-data", "pac-rec-prox", "pac-ctrl-data", "pac-ctrl-prox"].forEach((id) => {
+   "pac-rec-data", "pac-ctrl-data"].forEach(id => {
     document.getElementById(id).value = "";
   });
-  ["pac-cond", "pac-rec-status", "pac-ctrl-status"].forEach((id) => {
-    document.getElementById(id).value = "";
+  document.getElementById("pac-cond").value = "";
+  document.getElementById("pac-saude-mental").checked = false;
+  ["pac-rec-prox", "pac-rec-status", "pac-ctrl-prox", "pac-ctrl-status"].forEach(id => {
+    const el = document.getElementById(id);
+    el.value = "";
+    el.className = "status-display";
   });
   mostrarMsg("modal-msg", "", "");
 }
 
 function editarPaciente(id) {
-  const p = PACIENTES.find((x) => x.id === id);
+  const p = PACIENTES.find(x => x.id === id);
   if (!p) return;
 
   abrirModal(id);
@@ -419,40 +433,49 @@ function editarPaciente(id) {
   document.getElementById("pac-sus").value = p.sus || "";
   document.getElementById("pac-nasc").value = p.data_nasc || "";
   document.getElementById("pac-end").value = p.endereco || "";
-  document.getElementById("pac-cond").value = p.condicao || "";
+
+  const { cond, sm } = separarCondicao(p.condicao);
+  document.getElementById("pac-cond").value = cond;
+  document.getElementById("pac-saude-mental").checked = sm;
+
   document.getElementById("pac-rec-data").value = p.receita_data || "";
-  document.getElementById("pac-rec-prox").value = p.receita_prox || "";
+  document.getElementById("pac-rec-prox").value = p.receita_prox ? fmtData(p.receita_prox) : "";
   document.getElementById("pac-rec-status").value = p.receita_status || "";
   document.getElementById("pac-ctrl-data").value = p.ctrl_data || "";
-  document.getElementById("pac-ctrl-prox").value = p.ctrl_prox || "";
+  document.getElementById("pac-ctrl-prox").value = p.ctrl_prox ? fmtData(p.ctrl_prox) : "";
   document.getElementById("pac-ctrl-status").value = p.ctrl_status || "";
+
+  atualizarCorStatus("pac-rec-status", p.receita_status);
+  atualizarCorStatus("pac-ctrl-status", p.ctrl_status);
 }
 
 async function salvarPaciente() {
   const nome = document.getElementById("pac-nome").value.trim();
-  const cond = document.getElementById("pac-cond").value;
+  const condicao = montarCondicao();
 
-  if (!nome) {
-    mostrarMsg("modal-msg", "O nome é obrigatório.", "error");
-    return;
-  }
+  if (!nome) { mostrarMsg("modal-msg", "O nome é obrigatório.", "error"); return; }
 
   const btn = document.getElementById("btn-salvar");
   btn.disabled = true;
   btn.textContent = "Salvando…";
+
+  const recData = document.getElementById("pac-rec-data").value;
+  const ctrlData = document.getElementById("pac-ctrl-data").value;
+  const recProx = calcProxData(recData, 6);
+  const ctrlProx = calcProxData(ctrlData, 2);
 
   const payload = {
     nome,
     sus: document.getElementById("pac-sus").value.trim() || null,
     data_nasc: document.getElementById("pac-nasc").value || null,
     endereco: document.getElementById("pac-end").value.trim() || null,
-    condicao: cond || null,
-    receita_data: document.getElementById("pac-rec-data").value || null,
-    receita_prox: document.getElementById("pac-rec-prox").value || null,
-    receita_status: document.getElementById("pac-rec-status").value || null,
-    ctrl_data: document.getElementById("pac-ctrl-data").value || null,
-    ctrl_prox: document.getElementById("pac-ctrl-prox").value || null,
-    ctrl_status: document.getElementById("pac-ctrl-status").value || null,
+    condicao: condicao || null,
+    receita_data: recData || null,
+    receita_prox: recProx || null,
+    receita_status: recProx ? calcStatus(recProx) : null,
+    ctrl_data: ctrlData || null,
+    ctrl_prox: ctrlProx || null,
+    ctrl_status: ctrlProx ? calcStatus(ctrlProx) : null,
   };
 
   const pacId = document.getElementById("pac-id").value;
@@ -469,10 +492,7 @@ async function salvarPaciente() {
   btn.disabled = false;
   btn.textContent = "Salvar";
 
-  if (error) {
-    mostrarMsg("modal-msg", "Erro ao salvar: " + error.message, "error");
-    return;
-  }
+  if (error) { mostrarMsg("modal-msg", "Erro ao salvar: " + error.message, "error"); return; }
 
   fecharModal();
   await carregarPacientes();
@@ -489,6 +509,9 @@ async function excluirPaciente(id) {
 document.getElementById("overlay").addEventListener("click", function (e) {
   if (e.target === this) fecharModal();
 });
+
+document.getElementById("pac-rec-data").addEventListener("change", atualizarCamposReceita);
+document.getElementById("pac-ctrl-data").addEventListener("change", atualizarCamposControlada);
 
 // ── INIT ──────────────────────────────────────
 init();
