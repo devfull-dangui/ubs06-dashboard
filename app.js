@@ -30,9 +30,19 @@ function calcStatus(proxStr) {
   hoje.setHours(0, 0, 0, 0);
   const prox = new Date(proxStr + "T00:00:00");
   const diffDias = Math.ceil((prox - hoje) / (1000 * 60 * 60 * 24));
-  if (diffDias < 0) return "VENCIDA";
+  if (diffDias <= 0) return "VENCIDA";
   if (diffDias <= 30) return "EM BREVE";
   return "A VENCER";
+}
+
+// Status sempre recalculado a partir da data — nunca lê o valor congelado do banco.
+// Garante que VENCIDA/EM BREVE/A VENCER mudem sozinhos todo dia, sem precisar editar o paciente.
+function statusReceita(p) {
+  return calcStatus(p.receita_prox);
+}
+
+function statusCtrl(p) {
+  return calcStatus(p.ctrl_prox);
 }
 
 function atualizarCamposReceita() {
@@ -84,6 +94,15 @@ async function init() {
   if (session) entrarNoApp(session.user);
 }
 
+// Quando a ACS clica no link de recuperação do e-mail, o Supabase abre uma
+// sessão temporária de "recovery" — em vez de entrar no app, mostramos a
+// tela de definir nova senha.
+sb.auth.onAuthStateChange((event) => {
+  if (event === "PASSWORD_RECOVERY") {
+    alternarForm("nova-senha");
+  }
+});
+
 async function fazerLogin() {
   const email = document.getElementById("login-email").value.trim();
   const senha = document.getElementById("login-senha").value;
@@ -120,6 +139,34 @@ async function criarConta() {
   } else {
     mostrarMsg("login-msg", "Conta criada! Verifique seu e-mail para confirmar.", "success");
   }
+}
+
+async function enviarRecuperacao() {
+  const email = document.getElementById("rec-email").value.trim();
+  if (!email) { mostrarMsg("login-msg", "Informe seu e-mail.", "error"); return; }
+
+  mostrarMsg("login-msg", "", "");
+  const { error } = await sb.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + window.location.pathname,
+  });
+
+  if (error) { mostrarMsg("login-msg", "Erro ao enviar: " + error.message, "error"); return; }
+  mostrarMsg("login-msg", "Link enviado! Verifique seu e-mail (e a caixa de spam).", "success");
+}
+
+async function salvarNovaSenha() {
+  const senha = document.getElementById("nova-senha").value;
+  const confirmar = document.getElementById("nova-senha-confirmar").value;
+
+  if (senha.length < 6) { mostrarMsg("login-msg", "A senha precisa ter pelo menos 6 caracteres.", "error"); return; }
+  if (senha !== confirmar) { mostrarMsg("login-msg", "As senhas não coincidem.", "error"); return; }
+
+  const { error } = await sb.auth.updateUser({ password: senha });
+  if (error) { mostrarMsg("login-msg", "Erro ao salvar: " + error.message, "error"); return; }
+
+  await sb.auth.signOut();
+  mostrarMsg("login-msg", "Senha atualizada! Faça login com a nova senha.", "success");
+  alternarForm("login");
 }
 
 async function entrarNoApp(user) {
@@ -161,7 +208,7 @@ async function carregarPacientes() {
 // ── HELPERS ───────────────────────────────────
 
 function statusGeral(p) {
-  const statuses = [p.receita_status, p.ctrl_status].filter(Boolean);
+  const statuses = [statusReceita(p), statusCtrl(p)].filter(Boolean);
   if (statuses.includes("VENCIDA")) return "VENCIDA";
   if (statuses.includes("EM BREVE")) return "EM BREVE";
   if (statuses.includes("A VENCER")) return "A VENCER";
@@ -208,6 +255,8 @@ function mostrarMsg(elId, texto, tipo) {
 function alternarForm(modo) {
   document.getElementById("form-login").style.display = modo === "login" ? "" : "none";
   document.getElementById("form-cadastro").style.display = modo === "cadastro" ? "" : "none";
+  document.getElementById("form-recuperar").style.display = modo === "recuperar" ? "" : "none";
+  document.getElementById("form-nova-senha").style.display = modo === "nova-senha" ? "" : "none";
   mostrarMsg("login-msg", "", "");
 }
 
@@ -222,10 +271,10 @@ function renderSummary() {
 }
 
 function criarAlertaItem(p) {
-  const recVenc = p.receita_status === "VENCIDA";
-  const recBreve = p.receita_status === "EM BREVE";
-  const ctlVenc = p.ctrl_status === "VENCIDA";
-  const ctlBreve = p.ctrl_status === "EM BREVE";
+  const recVenc = statusReceita(p) === "VENCIDA";
+  const recBreve = statusReceita(p) === "EM BREVE";
+  const ctlVenc = statusCtrl(p) === "VENCIDA";
+  const ctlBreve = statusCtrl(p) === "EM BREVE";
   const vencida = recVenc || ctlVenc;
 
   const tipo = [];
@@ -266,12 +315,12 @@ function criarAlertaItem(p) {
 
 function renderAlertas() {
   const urgentes = PACIENTES.filter(p =>
-    p.receita_status === "VENCIDA" || p.ctrl_status === "VENCIDA" ||
-    p.receita_status === "EM BREVE" || p.ctrl_status === "EM BREVE"
+    statusReceita(p) === "VENCIDA" || statusCtrl(p) === "VENCIDA" ||
+    statusReceita(p) === "EM BREVE" || statusCtrl(p) === "EM BREVE"
   ).sort((a, b) => {
     const peso = s => s === "VENCIDA" ? 0 : s === "EM BREVE" ? 1 : 2;
-    return Math.min(peso(a.receita_status), peso(a.ctrl_status)) -
-           Math.min(peso(b.receita_status), peso(b.ctrl_status));
+    return Math.min(peso(statusReceita(a)), peso(statusCtrl(a))) -
+           Math.min(peso(statusReceita(b)), peso(statusCtrl(b)));
   });
 
   const wrap = document.getElementById("alertas-wrap");
@@ -303,14 +352,14 @@ function criarLinhaTabela(p) {
   tdCond.appendChild(span);
 
   const tdRecStatus = document.createElement("td");
-  tdRecStatus.innerHTML = badgeStatus(p.receita_status);
+  tdRecStatus.innerHTML = badgeStatus(statusReceita(p));
 
   const tdRecProx = document.createElement("td");
   tdRecProx.className = "sub-cell";
   tdRecProx.textContent = fmtData(p.receita_prox);
 
   const tdCtlStatus = document.createElement("td");
-  tdCtlStatus.innerHTML = badgeStatus(p.ctrl_status);
+  tdCtlStatus.innerHTML = badgeStatus(statusCtrl(p));
 
   const tdCtlProx = document.createElement("td");
   tdCtlProx.className = "sub-cell";
@@ -382,10 +431,10 @@ function exportarExcel() {
     Condição: p.condicao || "",
     "Receita — Data": fmtData(p.receita_data),
     "Receita — Próx.": fmtData(p.receita_prox),
-    "Receita — Status": p.receita_status || "",
+    "Receita — Status": statusReceita(p) || "",
     "Controlada — Data": fmtData(p.ctrl_data),
     "Controlada — Próx.": fmtData(p.ctrl_prox),
-    "Controlada — Status": p.ctrl_status || "",
+    "Controlada — Status": statusCtrl(p) || "",
   }));
 
   const ws = XLSX.utils.json_to_sheet(dados);
@@ -440,13 +489,13 @@ function editarPaciente(id) {
 
   document.getElementById("pac-rec-data").value = p.receita_data || "";
   document.getElementById("pac-rec-prox").value = p.receita_prox ? fmtData(p.receita_prox) : "";
-  document.getElementById("pac-rec-status").value = p.receita_status || "";
+  document.getElementById("pac-rec-status").value = statusReceita(p) || "";
   document.getElementById("pac-ctrl-data").value = p.ctrl_data || "";
   document.getElementById("pac-ctrl-prox").value = p.ctrl_prox ? fmtData(p.ctrl_prox) : "";
-  document.getElementById("pac-ctrl-status").value = p.ctrl_status || "";
+  document.getElementById("pac-ctrl-status").value = statusCtrl(p) || "";
 
-  atualizarCorStatus("pac-rec-status", p.receita_status);
-  atualizarCorStatus("pac-ctrl-status", p.ctrl_status);
+  atualizarCorStatus("pac-rec-status", statusReceita(p));
+  atualizarCorStatus("pac-ctrl-status", statusCtrl(p));
 }
 
 async function salvarPaciente() {
@@ -512,6 +561,27 @@ document.getElementById("overlay").addEventListener("click", function (e) {
 
 document.getElementById("pac-rec-data").addEventListener("change", atualizarCamposReceita);
 document.getElementById("pac-ctrl-data").addEventListener("change", atualizarCamposControlada);
+
+document.getElementById("login-senha").addEventListener("keydown", function (e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    fazerLogin();
+  }
+});
+
+document.getElementById("rec-email").addEventListener("keydown", function (e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    enviarRecuperacao();
+  }
+});
+
+document.getElementById("nova-senha-confirmar").addEventListener("keydown", function (e) {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    salvarNovaSenha();
+  }
+});
 
 // ── INIT ──────────────────────────────────────
 init();

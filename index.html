@@ -33,6 +33,9 @@
           </div>
           <button class="btn" onclick="fazerLogin()">Entrar</button>
           <div class="login-toggle">
+            <a onclick="alternarForm('recuperar')">Esqueceu a senha?</a>
+          </div>
+          <div class="login-toggle">
             Ainda não tem conta?
             <a onclick="alternarForm('cadastro')">Criar conta</a>
           </div>
@@ -68,6 +71,54 @@
           <div class="login-toggle">
             Já tem conta? <a onclick="alternarForm('login')">Entrar</a>
           </div>
+        </div>
+
+        <!-- FORM RECUPERAR SENHA -->
+        <div id="form-recuperar" style="display: none">
+          <p style="font-size: 0.82rem; color: var(--muted); margin-bottom: 1rem">
+            Informe o e-mail cadastrado. Vamos enviar um link para você
+            redefinir a senha.
+          </p>
+          <div class="field">
+            <label>E-mail</label>
+            <input
+              type="email"
+              id="rec-email"
+              placeholder="seu@email.com"
+            />
+          </div>
+          <button class="btn" onclick="enviarRecuperacao()">
+            Enviar link de recuperação
+          </button>
+          <div class="login-toggle">
+            <a onclick="alternarForm('login')">Voltar ao login</a>
+          </div>
+        </div>
+
+        <!-- FORM NOVA SENHA (acessado pelo link do e-mail) -->
+        <div id="form-nova-senha" style="display: none">
+          <p style="font-size: 0.82rem; color: var(--muted); margin-bottom: 1rem">
+            Defina sua nova senha de acesso.
+          </p>
+          <div class="field">
+            <label>Nova senha</label>
+            <input
+              type="password"
+              id="nova-senha"
+              placeholder="Mínimo 6 caracteres"
+            />
+          </div>
+          <div class="field">
+            <label>Confirmar nova senha</label>
+            <input
+              type="password"
+              id="nova-senha-confirmar"
+              placeholder="Repita a senha"
+            />
+          </div>
+          <button class="btn" onclick="salvarNovaSenha()">
+            Salvar nova senha
+          </button>
         </div>
       </div>
     </div>
