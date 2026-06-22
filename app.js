@@ -90,6 +90,17 @@ function separarCondicao(valor) {
 // ── AUTH ──────────────────────────────────────
 
 async function init() {
+  // Checagem direta na URL — não depende do timing do evento PASSWORD_RECOVERY.
+  // O link do e-mail volta com "type=recovery" no hash (ou na query, em alguns casos).
+  const veioDeRecuperacao =
+    window.location.hash.includes("type=recovery") ||
+    window.location.search.includes("type=recovery");
+
+  if (veioDeRecuperacao) {
+    alternarForm("nova-senha");
+    return;
+  }
+
   const { data: { session } } = await sb.auth.getSession();
   if (session) entrarNoApp(session.user);
 }
