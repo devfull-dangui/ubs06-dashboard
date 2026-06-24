@@ -138,6 +138,23 @@ async function criarConta() {
     return;
   }
 
+  // Impede que a mesma ACS crie uma segunda conta (com nome igual ou e-mail já usado).
+  const { data: checagem, error: erroCheck } = await sb
+    .schema("app")
+    .rpc("checar_cadastro_duplicado", { p_nome: nome, p_email: email })
+    .single();
+
+  if (erroCheck) { mostrarMsg("login-msg", "Erro ao validar cadastro: " + erroCheck.message, "error"); return; }
+
+  if (checagem?.nome_duplicado) {
+    mostrarMsg("login-msg", "Já existe uma conta com esse nome. Esqueceu a senha? Use 'Esqueceu a senha?' no login.", "error");
+    return;
+  }
+  if (checagem?.email_duplicado) {
+    mostrarMsg("login-msg", "Esse e-mail já está cadastrado. Use 'Esqueceu a senha?' no login.", "error");
+    return;
+  }
+
   const { data, error } = await sb.auth.signUp({
     email, password: senha,
     options: { data: { nome, setor } },
